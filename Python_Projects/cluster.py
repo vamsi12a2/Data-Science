@@ -1,31 +1,61 @@
-import urllib2
-from BeautifulSoup import BeautifulSoup as bs
-import re
-import pandas as pd
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jan 22 19:28:40 2016
 
-dt = bs(urllib2.urlopen("http://yellowpages.fullhyderabad.com/computer-institutes-in-hyderabad-be"))
+@author: Vamsi
+"""
 
-names = [re.sub('[()]','',re.sub('\n*<[^>]+>\n','',dt('p')[i].prettify())).replace('Computer Training','').strip() for i in range(0,len(dt('p')))]
-locations=[re.sub('(<[^>]+>\n)','',dt('span')[i].prettify()).strip() for i in range(3,len(dt('span')),3)]
+# -*- coding: utf-8 -*-
 
-locations = locations[:-1]
-cord=[]
-for loc in locations:
-	obj =  urllib2.urlopen("https://maps.googleapis.com/maps/api/geocode/xml?address="+ loc.replace(' ','+')+"&key=AIzaSyAWE7Ak-EAy9OWMX-UtqwL0DJqh-qN8Ioo")
-	dat = bs(obj.read())
-	cord.append([dat.lat,dat.lng])
+from __future__ import print_function
+import string
+import nltk, sklearn, string, os
+from nltk.stem.porter import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.cluster import KMeans
 
-for c in cord:
-	if c[0]!=None:
-		c[0]=re.sub('<.*>\n','',c[0].prettify()).strip()
-		c[1]=re.sub('<.*>\n','',c[1].prettify()).strip()
-cord[0][0]='17.3665430'
-cord[0][1]='78.5230520'
-cord[10][0]='17.3433290'
-cord[10][1]='78.4780330'
-cord[12][0]='17.4500206'
-cord[12][1]='78.5006351'
-dt = pd.DataFrame()
-dt['Location']=locations
-dt['latitute']=[cord[i][0] for i in range(0,15)]
-dt['longitude']=[cord[i][1] for i in range(0,15)]
+# Preprocessing text with NLTK package
+token_dict = {}
+stemmer = PorterStemmer()
+
+def stem_tokens(tokens, stemmer):
+    stemmed = []
+    for item in tokens:
+        stemmed.append(stemmer.stem(item))
+    return stemmed
+
+def tokenize(text):
+    tokens = nltk.word_tokenize(text)
+    stems = stem_tokens(tokens, stemmer)
+    return stems
+###########################################################################
+# Loading and preprocessing text data
+print("\n Loading text dataset:")
+shakes = open('pro.txt', 'r')
+text = shakes.read()
+lowers = text.lower()
+no_punctuation = lowers.translate(string.maketrans(string.punctuation,string.punctuation))
+token_dict = no_punctuation
+###########################################################################
+true_k = 3 # *
+print("\n Performing stemming and tokenization...")
+vectorizer = TfidfVectorizer(tokenizer=tokenize)
+X = vectorizer.fit_transform(token_dict)
+print(tokenize(token_dict))
+print("n_samples: %d, n_features: %d" % X.shape)
+print()
+###############################################################################
+# Do the actual clustering
+km = KMeans(n_clusters=true_k, init='k-means++', max_iter=1000, n_init=1)
+y=km.fit(X)
+print(km)
+
+print("Top terms per cluster:")
+order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+terms = vectorizer.get_feature_names()
+for i in range(true_k):
+    print("Cluster %d:" % i, end='')
+    for ind in order_centroids[i, :10]:
+        print(' %s' % terms[ind], end='')
+    print(order_centroids[0,:10])
